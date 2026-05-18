@@ -6,7 +6,6 @@
 <title>PetHub OMS</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   * { font-family: 'DM Sans', sans-serif; }
@@ -66,16 +65,16 @@
     <div class="flex items-center justify-between">
       <div>
         <div class="text-sm font-bold text-gray-900" x-text="msgModal.title"></div>
-        <div class="text-[11px] text-gray-400 mt-0.5">Copy & paste to WhatsApp</div>
+        <div class="text-[11px] text-gray-400 mt-0.5">Will open direct WhatsApp API string</div>
       </div>
       <span class="text-xl">💬</span>
     </div>
     <div class="copy-msg-box" x-text="msgModal.text"></div>
     <div class="flex gap-2">
-      <button @click="copyMsgAndProceed()" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
-        <span>📋</span> <span>Copy Message</span>
+      <button @click="openWhatsAppAndProceed()" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+        <span>🚀</span> <span>Open WhatsApp</span>
       </button>
-      <button @click="msgModal.open = false; if(msgModal.onSkip) msgModal.onSkip();" class="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-3 px-4 rounded-xl transition-all">Skip</button>
+      <button @click="msgModal.open = false; if(msgModal.onSkip) msgModal.onSkip();" class="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-3 px-4 rounded-xl transition-all">Skip Link</button>
     </div>
   </div>
 </div>
@@ -188,18 +187,7 @@
   <div class="flex-1 md:ml-56 flex flex-col min-h-screen">
 
     <div class="hidden md:flex bg-white border-b border-gray-100 px-8 py-4 items-center justify-between sticky top-0 z-10">
-      <div class="flex items-center gap-6">
-        <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider" x-text="viewLabel()"></h2>
-        <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 text-xs">
-          <span class="font-medium text-gray-500">Report Range:</span>
-          <input type="date" x-model="reportRange.from" class="bg-transparent border-0 focus:ring-0 p-0 text-gray-700 font-semibold w-28">
-          <span class="text-gray-400">to</span>
-          <input type="date" x-model="reportRange.to" class="bg-transparent border-0 focus:ring-0 p-0 text-gray-700 font-semibold w-28">
-          <button @click="exportItemWiseExcel()" class="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 rounded-lg transition-all flex items-center gap-1 shadow-sm">
-            <span>📊</span> Export Excel
-          </button>
-        </div>
-      </div>
+      <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider" x-text="viewLabel()"></h2>
       <div class="flex items-center gap-4">
         <div class="flex items-center gap-3 text-xs font-semibold text-gray-400">
           <span>Today's Revenue: <span class="text-emerald-600 font-black" x-text="'₹' + metrics().revenue"></span></span>
@@ -254,17 +242,6 @@
             </div>
           </div>
 
-          <div class="md:hidden bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
-            <div class="text-xs font-bold text-gray-900">Download Excel Report</div>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="date" x-model="reportRange.from" class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs">
-              <input type="date" x-model="reportRange.to" class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs">
-            </div>
-            <button @click="exportItemWiseExcel()" class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-xl transition-all">
-              📊 Export Item-Wise Excel Report
-            </button>
-          </div>
-
           <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
 
             <div class="md:col-span-2 bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
@@ -272,14 +249,13 @@
                 <span class="text-base">⚡</span>
                 <div>
                   <div class="text-sm font-bold text-gray-900">Paste WhatsApp Order</div>
-                  <div class="text-[11px] text-gray-400">Paste the customer order message below</div>
+                  <div class="text-[11px] text-gray-400">Paste incoming structure message string</div>
                 </div>
               </div>
               <textarea x-model="rawText" rows="7"
-                placeholder="*NEW ORDER: PETHUB* 🐾&#10;---&#10;🧑 *Parent:* Name&#10;🐾 *Pet Name:* Pet&#10;📍 *Address:* Full address&#10;📮 *Pincode:* 000000&#10;&#10;*Items Ordered:*&#10;• Product Name x1 = ₹000&#10;&#10;*TOTAL: ₹000*"
+                placeholder="*NEW ORDER: PETHUB* 🐾&#10;---&#10;🧑 *Parent:* Name&#10;📞 *Phone:* Mobile&#10;🐾 *Pet Name:* Pet&#10;📍 *Address:* Full address&#10;📮 *Pincode:* 000000&#10;&#10;*Items Ordered:*&#10;• Product Name x1 = ₹000&#10;&#10;*TOTAL: ₹000*"
                 class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none leading-relaxed"></textarea>
-              <div class="flex justify-between items-center">
-                <button @click="loadSample()" class="text-xs font-semibold text-emerald-600 hover:underline">Load sample order</button>
+              <div class="flex justify-end items-center">
                 <button @click="parseOrder()" class="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all">Parse & Add Order →</button>
               </div>
             </div>
@@ -343,7 +319,7 @@
             <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide" x-text="counts().unconfirmed + ' orders awaiting review'"></div>
             <button x-show="counts().unconfirmed > 0" @click="confirmAll()"
               class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
-              ✓ Accept All Orders
+              ✓ Accept All (No Messages)
             </button>
           </div>
 
@@ -352,7 +328,7 @@
               <span x-text="counts().unconfirmed"></span> orders · Total value:
               <span class="font-black" x-text="'₹' + orders.filter(o=>o.status==='Not Confirmed').reduce((s,o)=>s+o.total,0)"></span>
             </div>
-            <div class="text-[11px] text-amber-500">Review each order below</div>
+            <div class="text-[11px] text-amber-500">Trigger explicit confirmations below</div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -372,6 +348,7 @@
 
                 <div class="bg-gray-50 rounded-xl p-3.5 space-y-1.5 text-xs">
                   <div><span class="font-bold text-gray-500">Parent</span> <span class="text-gray-800 font-semibold ml-1" x-text="order.parentName"></span></div>
+                  <div><span class="font-bold text-gray-500">Phone</span> <span class="text-gray-800 font-mono font-medium ml-1" x-text="order.phone"></span></div>
                   <div><span class="font-bold text-gray-500">Pet</span> <span class="text-gray-800 font-semibold ml-1" x-text="order.petName"></span></div>
                   <div><span class="font-bold text-gray-500">Address</span> <span class="text-gray-600 ml-1" x-text="order.address"></span></div>
                   <div><span class="font-bold text-gray-500">Pincode</span> <span class="text-gray-600 ml-1" x-text="order.pincode"></span></div>
@@ -388,8 +365,8 @@
                 </div>
 
                 <div class="flex gap-2 pt-1">
-                  <button @click="acceptOrder(order)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all">✓ Accept</button>
-                  <button @click="rejectOrder(order)" class="bg-red-50 hover:bg-red-100 text-red-500 text-xs font-bold py-2.5 px-3 rounded-xl transition-all">✕ Reject</button>
+                  <button @click="acceptOrder(order)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all">💬 Accept & WhatsApp</button>
+                  <button @click="rejectOrder(order)" class="bg-red-50 hover:bg-red-100 text-red-500 text-xs font-bold py-2.5 px-3 rounded-xl transition-all">✕</button>
                 </div>
               </div>
             </template>
@@ -398,7 +375,7 @@
           <template x-if="counts().unconfirmed === 0">
             <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <div class="text-4xl">🎉</div>
-              <div class="text-sm text-gray-400 font-medium mt-2">All orders reviewed</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">All orders pipeline is clean</div>
             </div>
           </template>
         </div>
@@ -409,7 +386,7 @@
 
           <div class="flex items-center justify-between">
             <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide" x-text="counts().packing + ' orders to pack'"></div>
-            <div class="text-xs text-gray-400">Tick all items in an order to mark it packed</div>
+            <div class="text-xs text-gray-400">Tick items to unlock the delivery staging action</div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -457,7 +434,7 @@
                   @click="shipOrder(order)"
                   :class="order.items.every(i=>i.checked) ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'"
                   class="w-full text-xs font-bold py-3 rounded-xl transition-all">
-                  🚚 Mark Packed & Send to Delivery
+                  🚚 Staging & WhatsApp Route
                 </button>
               </div>
             </template>
@@ -466,7 +443,7 @@
           <template x-if="counts().packing === 0">
             <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <div class="text-4xl">📦</div>
-              <div class="text-sm text-gray-400 font-medium mt-2">Packing queue is clear</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">Packing room is clear</div>
             </div>
           </template>
         </div>
@@ -514,7 +491,7 @@
             </div>
 
             <div x-show="trips.length === 0" class="text-center py-4">
-              <div class="text-xs text-gray-400">No trips logged yet. Start a new trip when you head out.</div>
+              <div class="text-xs text-gray-400">No active tracking loops found. Add a log entry above.</div>
             </div>
           </div>
 
@@ -534,7 +511,7 @@
                   </div>
                   <div class="text-right">
                     <div class="text-xl font-black text-gray-900" x-text="'₹' + order.total"></div>
-                    <div class="text-[10px] text-gray-400 mt-0.5">to collect</div>
+                    <div class="text-[10px] text-gray-400 mt-0.5">Collect on Road</div>
                   </div>
                 </div>
 
@@ -544,7 +521,7 @@
                   <div class="flex justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800">
                     <span>Pincode: <span class="text-white font-bold" x-text="order.pincode"></span></span>
                     <span x-show="order.phone && order.phone !== 'N/A'">
-                      <a :href="'tel:' + order.phone" class="text-emerald-400 font-bold" x-text="order.phone"></a>
+                      <a :href="'tel:' + order.phone" class="text-emerald-400 font-bold font-mono" x-text="order.phone"></a>
                     </span>
                   </div>
                 </div>
@@ -565,7 +542,7 @@
           <template x-if="counts().delivery === 0">
             <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <div class="text-4xl">🛵</div>
-              <div class="text-sm text-gray-400 font-medium mt-2">No orders out for delivery yet</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">Staging platform is empty</div>
             </div>
           </template>
 
@@ -622,7 +599,7 @@
               </tbody>
             </table>
             <template x-if="counts().completed === 0">
-              <div class="text-center py-12 text-xs text-gray-300">No deliveries completed yet today</div>
+              <div class="text-center py-12 text-xs text-gray-300">No historical entries updated inside current runtime state.</div>
             </template>
           </div>
         </div>
@@ -653,7 +630,7 @@
               </tbody>
             </table>
             <template x-if="customers.length === 0">
-              <div class="text-center py-12 text-xs text-gray-300">No customer data yet</div>
+              <div class="text-center py-12 text-xs text-gray-300">No structured customer history active in memory.</div>
             </template>
           </div>
         </div>
@@ -695,25 +672,16 @@ function oms() {
     currentView: 'dashboard',
     rawText: '',
     toasts: [],
-    msgModal: { open: false, title: '', text: '', onCopy: null, onSkip: null },
+    msgModal: { open: false, title: '', text: '', phone: '', onCopy: null, onSkip: null },
     settlementModal: { open: false, order: null, paymentMode: 'UPI' },
     trips: [],
-    
-    // Clean state with sample data removed
     orders: [],
     customers: [],
 
-    // Report date range data binding
-    reportRange: {
-      from: new Date().toISOString().split('T')[0],
-      to: new Date().toISOString().split('T')[0]
-    },
-
     init() {
-      console.log('PetHub OMS operational engine initialized.');
+      console.log('PetHub OMS Initialized cleanly.');
     },
 
-    // ── Helpers ──────────────────────────────────────────────
     todayStr() {
       return new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     },
@@ -766,7 +734,6 @@ function oms() {
       return Object.entries(map).map(([name, qty]) => ({ name, qty }));
     },
 
-    // ── Toast ─────────────────────────────────────────────────
     toast(msg, icon = '✓') {
       const id = Date.now();
       this.toasts.push({ id, msg, icon });
@@ -775,19 +742,29 @@ function oms() {
       }, 3000);
     },
 
-    // ── WhatsApp Message Modal ────────────────────────────────
-    showMsg(title, text, onCopy, onSkip) {
-      this.msgModal = { open: true, title, text, onCopy, onSkip };
+    // ── Direct WhatsApp Open Routing Strategy ────────────────
+    showMsg(title, text, phone, onCopy, onSkip) {
+      this.msgModal = { open: true, title, text, phone, onCopy, onSkip };
     },
 
-    copyMsgAndProceed() {
-      navigator.clipboard.writeText(this.msgModal.text).catch(() => {});
-      this.toast('Message copied to clipboard!', '📋');
+    openWhatsAppAndProceed() {
+      let phoneStr = this.msgModal.phone.replace(/[^0-9]/g, '');
+      if (phoneStr.length === 10) {
+        phoneStr = '91' + phoneStr; // Default to India prefix country routing rules
+      }
+      
+      const encodedText = encodeURIComponent(this.msgModal.text);
+      const targetUrl = `https://wa.me/${phoneStr}?text=${encodedText}`;
+      
+      // Fire explicit browser redirect anchor
+      window.open(targetUrl, '_blank');
+
+      this.toast('Opening WhatsApp...', '🚀');
       this.msgModal.open = false;
       if (this.msgModal.onCopy) this.msgModal.onCopy();
     },
 
-    // ── Order Parsing ─────────────────────────────────────────
+    // ── Order Parsing Engine ──────────────────────────────────
     parseOrder() {
       const text = this.rawText.trim();
       if (!text) { this.toast('Paste an order message first', '⚠️'); return; }
@@ -795,8 +772,8 @@ function oms() {
       const get = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
 
       const parentName = get(/\*?Parent:\*?\s*([^\n\r]+)/i)   || 'Unknown Parent';
-      const petName    = get(/\*?Pet Name:\*?\s*([^\n\r]+)/i) || 'Unknown Pet';
       const phone      = get(/\*?Phone:\*?\s*([^\n\r]+)/i)    || 'N/A';
+      const petName    = get(/\*?Pet Name:\*?\s*([^\n\r]+)/i) || 'Unknown Pet';
       const address    = get(/\*?Address:\*?\s*([^\n\r]+)/i)  || 'No Address';
       const pincode    = get(/\*?Pincode:\*?\s*([^\n\r]+)/i)  || 'N/A';
 
@@ -819,12 +796,11 @@ function oms() {
         items.push({ name: 'General Pet Product', qty: 1, checked: false });
       }
 
-      const id = `PH-${1000 + this.orders.length + 1}`;
+      const id = `PH-${1001 + this.orders.length}`;
       const order = {
-        id, parentName, petName, phone, address, pincode, items, total,
+        id, parentName, phone, petName, address, pincode, items, total,
         status: 'Not Confirmed',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        dateRaw: new Date().toISOString().split('T')[0], // Track ISO Date format for dynamic filtering
         paymentMode: null
       };
 
@@ -833,10 +809,6 @@ function oms() {
       this.updateCustomer(parentName, petName, total);
       this.toast(`Order ${id} added`, '🐾');
       this.currentView = 'unconfirmed';
-    },
-
-    loadSample() {
-      this.rawText = `*NEW ORDER: PETHUB* 🐾\n---\n🧑 *Parent:* Anjali Nair\n🐾 *Pet Name:* Kiki\n📍 *Address:* Olive Heights, Block C-3, Edapally, Kochi\n📮 *Pincode:* 682024\n\n*Items Ordered:*\n• Royal Canin Starter Maxi (4kg) x2 = ₹2900\n• Drools Puppy Chicken (3kg) x1 = ₹750\n\n*Subtotal:* ₹3650\n*Delivery:* FREE\n*TOTAL: ₹3650*`;
     },
 
     updateCustomer(parentName, petName, total) {
@@ -851,27 +823,28 @@ function oms() {
       }
     },
 
-    // ── Stage Actions ─────────────────────────────────────────
+    // ── Pipeline State Machinery ─────────────────────────────
     acceptOrder(order) {
       order.status = 'Pending Packing';
       const msg = this.buildConfirmMsg(order);
       this.showMsg(
-        'Order Confirmed ✓',
+        'Order Confirmed! 🚀',
         msg,
-        () => { this.toast(`${order.id} moved to Packing`, '📦'); },
-        () => { this.toast(`${order.id} moved to Packing`, '📦'); }
+        order.phone,
+        () => { this.toast(`${order.id} moved to Packing Room`, '📦'); },
+        () => { this.toast(`${order.id} moved to Packing Room`, '📦'); }
       );
     },
 
     rejectOrder(order) {
       order.status = 'Cancelled';
-      this.toast(`${order.id} rejected`, '✕');
+      this.toast(`${order.id} flagged as cancelled`, '✕');
     },
 
     confirmAll() {
       const pending = this.orders.filter(o => o.status === 'Not Confirmed');
       pending.forEach(o => { o.status = 'Pending Packing'; });
-      this.toast(`${pending.length} orders accepted`, '✓');
+      this.toast(`${pending.length} orders updated directly`, '✓');
       this.currentView = 'packing';
     },
 
@@ -879,10 +852,11 @@ function oms() {
       order.status = 'Out for Delivery';
       const msg = this.buildDeliveryMsg(order);
       this.showMsg(
-        'Out for Delivery 🚚',
+        'Out for Delivery! 🛵',
         msg,
-        () => { this.toast(`${order.id} is out for delivery`, '🚚'); },
-        () => { this.toast(`${order.id} is out for delivery`, '🚚'); }
+        order.phone,
+        () => { this.toast(`${order.id} assigned to transit loop`, '🚚'); },
+        () => { this.toast(`${order.id} assigned to transit loop`, '🚚'); }
       );
     },
 
@@ -896,66 +870,14 @@ function oms() {
       order.status = 'Delivered';
       order.paymentMode = this.settlementModal.paymentMode;
       this.settlementModal.open = false;
-      this.toast(`${order.id} delivered · ${order.paymentMode}`, '✅');
+      this.toast(`${order.id} marked delivered via ${order.paymentMode}`, '✅');
     },
 
-    // ── Trip Management ───────────────────────────────────────
     addTrip() {
       this.trips.push({ id: Date.now(), startKm: '', endKm: '' });
     },
 
-    // ── Item-Wise Excel Download Engineering ─────────────────
-    exportItemWiseExcel() {
-      // Filter orders landing securely within designated range metrics
-      const targetOrders = this.orders.filter(o => {
-        if (!o.dateRaw) return true; // match fallback standard entries
-        return o.dateRaw >= this.reportRange.from && o.dateRaw <= this.reportRange.to;
-      });
-
-      if (targetOrders.length === 0) {
-        this.toast('No item logs found inside this range window', '⚠️');
-        return;
-      }
-
-      const rows = [];
-      targetOrders.forEach(order => {
-        order.items.forEach(item => {
-          // Dynamic pricing estimation fallback logic
-          const calculatedRate = order.total > 0 ? Math.round(order.total / order.items.reduce((acc, i) => acc + i.qty, 0)) : 0;
-          
-          rows.push({
-            "Order ID": order.id,
-            "Timestamp": order.timestamp,
-            "Date Code": order.dateRaw || 'Today',
-            "Parent Name": order.parentName,
-            "Pet Name": order.petName,
-            "Item Name": item.name,
-            "Quantity": item.qty,
-            "Estimated Item Rate (₹)": calculatedRate,
-            "Line Value Cost (₹)": calculatedRate * item.qty,
-            "Pincode Target": order.pincode,
-            "Pipeline Status": order.status,
-            "Payment Settlement Mode": order.paymentMode || 'Unsettled / COD'
-          });
-        });
-      });
-
-      // Build SheetJS Workbook
-      const worksheet = XLSX.utils.json_to_sheet(rows);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Item-Wise Report");
-
-      // Auto-compute uniform column sizing layouts for aesthetics
-      const maxProps = [{wch:12},{wch:15},{wch:12},{wch:18},{wch:12},{wch:32},{wch:10},{wch:22},{wch:18},{wch:15},{wch:16},{wch:22}];
-      worksheet['!cols'] = maxProps;
-
-      // Force instant down-stream parsing pipeline
-      const fileNameStr = `PetHub_ItemWiseReport_${this.reportRange.from}_to_${this.reportRange.to}.xlsx`;
-      XLSX.writeFile(workbook, fileNameStr);
-      this.toast('Excel report ready & saved!', '📊');
-    },
-
-    // ── Message Builders ──────────────────────────────────────
+    // ── WhatsApp Standard Text Payload Builders ──────────────
     buildConfirmMsg(order) {
       const itemLines = order.items.map(i => `  • ${i.name} ×${i.qty}`).join('\n');
       return `Hi ${order.parentName}! 👋\n\nYour PetHub order has been confirmed ✅\n\n🆔 Order ID: ${order.id}\n🐾 For: ${order.petName}\n\n📦 Items:\n${itemLines}\n\n💰 Total: ₹${order.total}\n🚚 Delivery: FREE\n\nWe're packing your order now and will send another update once it's on the way! 🐾\n\n— PetHub 🛒`;
