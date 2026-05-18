@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PetHub OMS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'DM Sans', sans-serif; }
+  code, .mono { font-family: 'DM Mono', monospace; }
+  [x-cloak] { display: none !important; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+
+  .sidebar-link { @apply w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150; }
+  .badge { @apply text-[10px] font-bold px-2 py-0.5 rounded-lg; }
+
+  /* Toast */
+  .toast-enter { animation: toastIn 0.3s ease forwards; }
+  .toast-leave { animation: toastOut 0.3s ease forwards; }
+  @keyframes toastIn { from { opacity:0; transform: translateY(16px) scale(0.96); } to { opacity:1; transform: translateY(0) scale(1); } }
+  @keyframes toastOut { from { opacity:1; transform: translateY(0) scale(1); } to { opacity:0; transform: translateY(8px) scale(0.96); } }
+
+  /* Card hover */
+  .order-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+  .order-card:hover { box-shadow: 0 8px 24px -4px rgba(0,0,0,0.08); transform: translateY(-1px); }
+
+  /* Checklist item */
+  .check-item input[type=checkbox]:checked + span { text-decoration: line-through; color: #9ca3af; }
+
+  /* Mobile nav bottom */
+  @media (max-width: 767px) {
+    .mobile-safe { padding-bottom: 72px; }
+  }
+
+  /* Pulse dot */
+  .pulse-dot { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  /* Km field */
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .copy-msg-box { background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 14px; padding: 14px 16px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; color: #166534; font-family: 'DM Mono', monospace; }
+
+  .stage-pill { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900 antialiased" x-data="oms()" x-init="init()" x-cloak>
+
+<div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 pointer-events-none" style="min-width:280px">
+  <template x-for="toast in toasts" :key="toast.id">
+    <div class="toast-enter pointer-events-auto bg-gray-900 text-white text-xs font-semibold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 max-w-xs">
+      <span x-text="toast.icon"></span>
+      <span x-text="toast.msg"></span>
+    </div>
+  </template>
+</div>
+
+<div x-show="msgModal.open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+  class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+  <div @click.stop class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5 space-y-4">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-sm font-bold text-gray-900" x-text="msgModal.title"></div>
+        <div class="text-[11px] text-gray-400 mt-0.5">Copy & paste to WhatsApp</div>
+      </div>
+      <span class="text-xl">💬</span>
+    </div>
+    <div class="copy-msg-box" x-text="msgModal.text"></div>
+    <div class="flex gap-2">
+      <button @click="copyMsgAndProceed()" class="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+        <span>📋</span> <span>Copy Message</span>
+      </button>
+      <button @click="msgModal.open = false; if(msgModal.onSkip) msgModal.onSkip();" class="bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-semibold py-3 px-4 rounded-xl transition-all">Skip</button>
+    </div>
+  </div>
+</div>
+
+<div x-show="settlementModal.open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+  class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
+  <div @click.stop class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5 space-y-4">
+    <div>
+      <div class="text-sm font-bold text-gray-900">Mark as Delivered</div>
+      <div class="text-[11px] text-gray-400 mt-0.5" x-text="settlementModal.order ? settlementModal.order.id + ' · ' + settlementModal.order.parentName : ''"></div>
+    </div>
+    <div class="bg-gray-50 rounded-xl p-4 flex justify-between items-center">
+      <span class="text-xs text-gray-500 font-medium">Order Total</span>
+      <span class="text-2xl font-black text-gray-900" x-text="'₹' + (settlementModal.order ? settlementModal.order.total : 0)"></span>
+    </div>
+    <div class="space-y-2">
+      <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Payment Received Via</div>
+      <div class="grid grid-cols-3 gap-2">
+        <template x-for="mode in ['UPI','Cash','Pending']">
+          <button @click="settlementModal.paymentMode = mode"
+            :class="settlementModal.paymentMode === mode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+            class="py-2.5 text-xs font-bold rounded-xl transition-all" x-text="mode"></button>
+        </template>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button @click="confirmDelivered()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl transition-all">✓ Confirm Delivered</button>
+      <button @click="settlementModal.open = false" class="bg-gray-100 text-gray-600 text-xs font-semibold py-3 px-4 rounded-xl">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="min-h-screen flex flex-col md:flex-row">
+
+  <aside class="hidden md:flex w-56 bg-white border-r border-gray-100 flex-col justify-between shrink-0 fixed top-0 left-0 h-full z-30">
+    <div>
+      <div class="px-5 py-5 border-b border-gray-50">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-lg shadow-sm">🐾</div>
+          <div>
+            <div class="text-sm font-black text-gray-900 tracking-tight">PetHub</div>
+            <div class="text-[9px] font-bold text-gray-400 tracking-widest uppercase">Operations</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="p-3 space-y-0.5 mt-1">
+        <button @click="currentView='dashboard'"
+          :class="currentView==='dashboard' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>🏠</span><span>Dashboard</span></span>
+        </button>
+
+        <div class="pt-3 pb-1 px-3 text-[9px] font-bold text-gray-300 tracking-widest uppercase">Order Pipeline</div>
+
+        <button @click="currentView='unconfirmed'"
+          :class="currentView==='unconfirmed' ? 'bg-amber-50 text-amber-800' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>⏳</span><span>Unconfirmed</span></span>
+          <span x-show="counts().unconfirmed > 0" class="badge bg-amber-100 text-amber-700" x-text="counts().unconfirmed"></span>
+        </button>
+
+        <button @click="currentView='packing'"
+          :class="currentView==='packing' ? 'bg-blue-50 text-blue-800' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>📦</span><span>Packing</span></span>
+          <span x-show="counts().packing > 0" class="badge bg-blue-100 text-blue-700" x-text="counts().packing"></span>
+        </button>
+
+        <button @click="currentView='delivery'"
+          :class="currentView==='delivery' ? 'bg-indigo-50 text-indigo-800' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>🚚</span><span>Delivery</span></span>
+          <span x-show="counts().delivery > 0" class="badge bg-indigo-100 text-indigo-700" x-text="counts().delivery"></span>
+        </button>
+
+        <button @click="currentView='completed'"
+          :class="currentView==='completed' ? 'bg-emerald-50 text-emerald-800' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>✅</span><span>Completed</span></span>
+          <span x-show="counts().completed > 0" class="badge bg-gray-100 text-gray-600" x-text="counts().completed"></span>
+        </button>
+
+        <div class="pt-3 pb-1 px-3 text-[9px] font-bold text-gray-300 tracking-widest uppercase">Records</div>
+
+        <button @click="currentView='customers'"
+          :class="currentView==='customers' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'"
+          class="sidebar-link">
+          <span class="flex items-center gap-2.5"><span>👥</span><span>Customers</span></span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="p-4 border-t border-gray-50">
+      <div class="flex items-center gap-2 text-xs text-gray-400 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot"></span>
+        Live · <span x-text="todayStr()"></span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 bg-emerald-600 rounded-xl flex items-center justify-center text-white text-sm">🐾</div>
+      <span class="text-sm font-black text-gray-900">PetHub OMS</span>
+    </div>
+    <div class="text-xs font-bold text-gray-400" x-text="viewLabel()"></div>
+  </div>
+
+  <div class="flex-1 md:ml-56 flex flex-col min-h-screen">
+
+    <div class="hidden md:flex bg-white border-b border-gray-100 px-8 py-4 items-center justify-between sticky top-0 z-10">
+      <div class="flex items-center gap-6">
+        <h2 class="text-sm font-bold text-gray-900 uppercase tracking-wider" x-text="viewLabel()"></h2>
+        <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-200 text-xs">
+          <span class="font-medium text-gray-500">Report Range:</span>
+          <input type="date" x-model="reportRange.from" class="bg-transparent border-0 focus:ring-0 p-0 text-gray-700 font-semibold w-28">
+          <span class="text-gray-400">to</span>
+          <input type="date" x-model="reportRange.to" class="bg-transparent border-0 focus:ring-0 p-0 text-gray-700 font-semibold w-28">
+          <button @click="exportItemWiseExcel()" class="ml-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 rounded-lg transition-all flex items-center gap-1 shadow-sm">
+            <span>📊</span> Export Excel
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3 text-xs font-semibold text-gray-400">
+          <span>Today's Revenue: <span class="text-emerald-600 font-black" x-text="'₹' + metrics().revenue"></span></span>
+          <span class="text-gray-200">|</span>
+          <span>Delivery Cost: <span class="text-red-500 font-black" x-text="'₹' + metrics().deliveryCost"></span></span>
+          <span class="text-gray-200">|</span>
+          <span>Net: <span class="font-black" :class="metrics().net >= 0 ? 'text-emerald-600' : 'text-red-500'" x-text="'₹' + metrics().net"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <main class="flex-1 p-4 md:p-8 mobile-safe overflow-y-auto">
+
+      <template x-if="currentView === 'dashboard'">
+        <div class="space-y-6 max-w-4xl">
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div @click="currentView='unconfirmed'" class="bg-white border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-amber-300 transition-all group">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Unconfirmed</div>
+              <div class="text-3xl font-black text-amber-500 mt-1.5" x-text="counts().unconfirmed"></div>
+              <div class="text-[10px] text-gray-300 group-hover:text-amber-400 mt-1 font-semibold transition-colors">Review →</div>
+            </div>
+            <div @click="currentView='packing'" class="bg-white border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-blue-300 transition-all group">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">In Packing</div>
+              <div class="text-3xl font-black text-blue-500 mt-1.5" x-text="counts().packing"></div>
+              <div class="text-[10px] text-gray-300 group-hover:text-blue-400 mt-1 font-semibold transition-colors">Pack →</div>
+            </div>
+            <div @click="currentView='delivery'" class="bg-white border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-indigo-300 transition-all group">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Out for Delivery</div>
+              <div class="text-3xl font-black text-indigo-500 mt-1.5" x-text="counts().delivery"></div>
+              <div class="text-[10px] text-gray-300 group-hover:text-indigo-400 mt-1 font-semibold transition-colors">Track →</div>
+            </div>
+            <div @click="currentView='completed'" class="bg-white border border-gray-100 rounded-2xl p-4 cursor-pointer hover:border-emerald-300 transition-all group">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Delivered</div>
+              <div class="text-3xl font-black text-emerald-500 mt-1.5" x-text="counts().completed"></div>
+              <div class="text-[10px] text-gray-300 group-hover:text-emerald-400 mt-1 font-semibold transition-colors">Logs →</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-emerald-950 rounded-2xl p-4 text-white">
+              <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Revenue Collected</div>
+              <div class="text-2xl font-black mt-1" x-text="'₹' + metrics().revenue"></div>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-2xl p-4">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Delivery Expense</div>
+              <div class="text-2xl font-black text-red-500 mt-1" x-text="'₹' + metrics().deliveryCost"></div>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-2xl p-4">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Profit</div>
+              <div class="text-2xl font-black mt-1" :class="metrics().net >= 0 ? 'text-emerald-600' : 'text-red-500'" x-text="'₹' + metrics().net"></div>
+            </div>
+          </div>
+
+          <div class="md:hidden bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
+            <div class="text-xs font-bold text-gray-900">Download Excel Report</div>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="date" x-model="reportRange.from" class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs">
+              <input type="date" x-model="reportRange.to" class="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs">
+            </div>
+            <button @click="exportItemWiseExcel()" class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-xl transition-all">
+              📊 Export Item-Wise Excel Report
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            <div class="md:col-span-2 bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="text-base">⚡</span>
+                <div>
+                  <div class="text-sm font-bold text-gray-900">Paste WhatsApp Order</div>
+                  <div class="text-[11px] text-gray-400">Paste the customer order message below</div>
+                </div>
+              </div>
+              <textarea x-model="rawText" rows="7"
+                placeholder="*NEW ORDER: PETHUB* 🐾&#10;---&#10;🧑 *Parent:* Name&#10;🐾 *Pet Name:* Pet&#10;📍 *Address:* Full address&#10;📮 *Pincode:* 000000&#10;&#10;*Items Ordered:*&#10;• Product Name x1 = ₹000&#10;&#10;*TOTAL: ₹000*"
+                class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-xs mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all resize-none leading-relaxed"></textarea>
+              <div class="flex justify-between items-center">
+                <button @click="loadSample()" class="text-xs font-semibold text-emerald-600 hover:underline">Load sample order</button>
+                <button @click="parseOrder()" class="bg-gray-900 hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all">Parse & Add Order →</button>
+              </div>
+            </div>
+
+            <div class="bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
+              <div>
+                <div class="text-sm font-bold text-gray-900">Today's Shopping List</div>
+                <div class="text-[11px] text-gray-400">Items to buy — all confirmed orders</div>
+              </div>
+              <div class="space-y-1.5 max-h-48 overflow-y-auto">
+                <template x-for="item in shoppingList()">
+                  <div class="flex justify-between items-center text-xs py-1.5 border-b border-gray-50">
+                    <span class="text-gray-700 font-medium truncate max-w-[160px]" x-text="item.name"></span>
+                    <span class="bg-gray-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg ml-2 shrink-0" x-text="item.qty + 'x'"></span>
+                  </div>
+                </template>
+                <template x-if="shoppingList().length === 0">
+                  <p class="text-center text-xs text-gray-300 py-6">No confirmed orders yet</p>
+                </template>
+              </div>
+              <button @click="copyShoppingList()" class="w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 text-xs font-bold py-2 rounded-xl transition-all">📋 Copy Shopping List</button>
+            </div>
+          </div>
+
+          <div x-show="orders.length > 0" class="bg-white border border-gray-100 rounded-2xl p-5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="text-sm font-bold text-gray-900">Today's Orders</div>
+              <div class="text-[11px] text-gray-400" x-text="orders.filter(o=>o.status!=='Cancelled').length + ' total'"></div>
+            </div>
+            <div class="space-y-2">
+              <template x-for="order in orders.filter(o=>o.status!=='Cancelled').slice().reverse()" :key="order.id">
+                <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div class="flex items-center gap-3">
+                    <span class="mono text-[10px] text-gray-400 font-medium" x-text="order.id"></span>
+                    <span class="text-xs font-semibold text-gray-800" x-text="order.parentName"></span>
+                    <span class="text-[10px] text-gray-400" x-text="'🐾 ' + order.petName"></span>
+                  </div>
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs font-black text-gray-900" x-text="'₹' + order.total"></span>
+                    <span class="stage-pill"
+                      :class="{
+                        'bg-amber-100 text-amber-700': order.status==='Not Confirmed',
+                        'bg-blue-100 text-blue-700': order.status==='Pending Packing',
+                        'bg-indigo-100 text-indigo-700': order.status==='Out for Delivery',
+                        'bg-emerald-100 text-emerald-700': order.status==='Delivered',
+                        'bg-red-100 text-red-500': order.status==='Cancelled'
+                      }" x-text="order.status"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+        </div>
+      </template>
+
+      <template x-if="currentView === 'unconfirmed'">
+        <div class="space-y-4 max-w-5xl">
+
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide" x-text="counts().unconfirmed + ' orders awaiting review'"></div>
+            <button x-show="counts().unconfirmed > 0" @click="confirmAll()"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">
+              ✓ Accept All Orders
+            </button>
+          </div>
+
+          <div x-show="counts().unconfirmed > 0" class="bg-amber-50 border border-amber-100 rounded-2xl px-5 py-3 flex items-center justify-between">
+            <div class="text-xs text-amber-700 font-semibold">
+              <span x-text="counts().unconfirmed"></span> orders · Total value:
+              <span class="font-black" x-text="'₹' + orders.filter(o=>o.status==='Not Confirmed').reduce((s,o)=>s+o.total,0)"></span>
+            </div>
+            <div class="text-[11px] text-amber-500">Review each order below</div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="order in orders.filter(o=>o.status==='Not Confirmed')" :key="order.id">
+              <div class="order-card bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4">
+
+                <div class="flex justify-between items-start">
+                  <div>
+                    <span class="mono text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg" x-text="order.id"></span>
+                    <div class="text-[11px] text-gray-400 mt-1.5" x-text="'Added ' + order.timestamp"></div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-lg font-black text-gray-900" x-text="'₹' + order.total"></div>
+                    <div class="text-[10px] text-gray-400" x-text="order.items.length + ' item(s)'"></div>
+                  </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-3.5 space-y-1.5 text-xs">
+                  <div><span class="font-bold text-gray-500">Parent</span> <span class="text-gray-800 font-semibold ml-1" x-text="order.parentName"></span></div>
+                  <div><span class="font-bold text-gray-500">Pet</span> <span class="text-gray-800 font-semibold ml-1" x-text="order.petName"></span></div>
+                  <div><span class="font-bold text-gray-500">Address</span> <span class="text-gray-600 ml-1" x-text="order.address"></span></div>
+                  <div><span class="font-bold text-gray-500">Pincode</span> <span class="text-gray-600 ml-1" x-text="order.pincode"></span></div>
+                </div>
+
+                <div class="space-y-1">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Items</div>
+                  <template x-for="item in order.items">
+                    <div class="flex justify-between text-xs">
+                      <span class="text-gray-700" x-text="item.name"></span>
+                      <span class="font-bold text-gray-900" x-text="'x' + item.qty"></span>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                  <button @click="acceptOrder(order)" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-all">✓ Accept</button>
+                  <button @click="rejectOrder(order)" class="bg-red-50 hover:bg-red-100 text-red-500 text-xs font-bold py-2.5 px-3 rounded-xl transition-all">✕ Reject</button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <template x-if="counts().unconfirmed === 0">
+            <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
+              <div class="text-4xl">🎉</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">All orders reviewed</div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="currentView === 'packing'">
+        <div class="space-y-4 max-w-5xl">
+
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide" x-text="counts().packing + ' orders to pack'"></div>
+            <div class="text-xs text-gray-400">Tick all items in an order to mark it packed</div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <template x-for="order in orders.filter(o=>o.status==='Pending Packing')" :key="order.id">
+              <div class="order-card bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4">
+
+                <div class="flex justify-between items-center">
+                  <div>
+                    <span class="mono text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg" x-text="order.id"></span>
+                  </div>
+                  <div class="text-xs font-bold text-gray-700" x-text="order.parentName"></div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between text-[10px] font-semibold text-gray-400 mb-1.5">
+                    <span>Packing progress</span>
+                    <span x-text="order.items.filter(i=>i.checked).length + ' / ' + order.items.length + ' items'"></span>
+                  </div>
+                  <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-500 rounded-full transition-all duration-300"
+                      :style="'width:' + (order.items.filter(i=>i.checked).length / order.items.length * 100) + '%'"></div>
+                  </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-3 space-y-2">
+                  <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Item Checklist</div>
+                  <template x-for="(item, idx) in order.items" :key="idx">
+                    <label class="check-item flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-100 cursor-pointer select-none">
+                      <input type="checkbox" x-model="item.checked" class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 shrink-0">
+                      <span class="text-xs text-gray-800 font-medium transition-all" :class="item.checked ? 'line-through text-gray-400' : ''">
+                        <span x-text="item.name"></span>
+                        <span class="font-black text-emerald-700 ml-1 not-italic" :class="item.checked ? 'text-gray-400' : ''" x-text="'×' + item.qty"></span>
+                      </span>
+                    </label>
+                  </template>
+                </div>
+
+                <div class="text-xs text-gray-500 space-y-0.5">
+                  <div x-text="'📍 ' + order.address"></div>
+                  <div x-text="'📮 ' + order.pincode + '  ·  ₹' + order.total"></div>
+                </div>
+
+                <button
+                  :disabled="!order.items.every(i=>i.checked)"
+                  @click="shipOrder(order)"
+                  :class="order.items.every(i=>i.checked) ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-100 text-gray-300 cursor-not-allowed'"
+                  class="w-full text-xs font-bold py-3 rounded-xl transition-all">
+                  🚚 Mark Packed & Send to Delivery
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <template x-if="counts().packing === 0">
+            <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
+              <div class="text-4xl">📦</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">Packing queue is clear</div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template x-if="currentView === 'delivery'">
+        <div class="space-y-5 max-w-4xl">
+
+          <div class="bg-white border border-gray-100 rounded-2xl p-5 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-bold text-gray-900">🛵 Trip KM Tracker</div>
+                <div class="text-[11px] text-gray-400">₹5 per km · Records per trip</div>
+              </div>
+              <button @click="addTrip()" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all">+ New Trip</button>
+            </div>
+
+            <div class="space-y-3" x-show="trips.length > 0">
+              <template x-for="(trip, ti) in trips" :key="trip.id">
+                <div class="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <div class="text-xs font-bold text-gray-600" x-text="'Trip ' + (ti+1)"></div>
+                    <div x-show="trip.startKm && trip.endKm" class="text-xs font-black text-red-500"
+                      x-text="'₹' + ((trip.endKm - trip.startKm) * 5) + ' cost · ' + (trip.endKm - trip.startKm) + ' km'"></div>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">Start KM</div>
+                      <input type="number" x-model.number="trip.startKm" placeholder="e.g. 12400"
+                        class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs mono font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                    </div>
+                    <div>
+                      <div class="text-[10px] font-bold text-gray-400 uppercase mb-1">End KM</div>
+                      <input type="number" x-model.number="trip.endKm" placeholder="e.g. 12450"
+                        class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs mono font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div x-show="trips.length > 0" class="flex justify-between items-center bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+              <div class="text-xs font-bold text-red-600">Total Delivery Expense Today</div>
+              <div class="text-lg font-black text-red-600" x-text="'₹' + metrics().deliveryCost"></div>
+            </div>
+
+            <div x-show="trips.length === 0" class="text-center py-4">
+              <div class="text-xs text-gray-400">No trips logged yet. Start a new trip when you head out.</div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide" x-text="counts().delivery + ' orders ready for delivery'"></div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <template x-for="order in orders.filter(o=>o.status==='Out for Delivery')" :key="order.id">
+              <div class="order-card bg-white border border-gray-200 rounded-2xl p-5 flex flex-col gap-4">
+
+                <div class="flex justify-between items-start">
+                  <div>
+                    <span class="mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg" x-text="order.id"></span>
+                    <div class="text-sm font-black text-gray-900 mt-2" x-text="order.parentName"></div>
+                    <div class="text-[11px] text-gray-400" x-text="'🐾 ' + order.petName"></div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-xl font-black text-gray-900" x-text="'₹' + order.total"></div>
+                    <div class="text-[10px] text-gray-400 mt-0.5">to collect</div>
+                  </div>
+                </div>
+
+                <div class="bg-gray-900 text-white rounded-xl p-4 space-y-2">
+                  <div class="text-[9px] font-bold text-emerald-400 uppercase tracking-widest">Delivery Address</div>
+                  <div class="text-sm font-semibold leading-relaxed" x-text="order.address"></div>
+                  <div class="flex justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800">
+                    <span>Pincode: <span class="text-white font-bold" x-text="order.pincode"></span></span>
+                    <span x-show="order.phone && order.phone !== 'N/A'">
+                      <a :href="'tel:' + order.phone" class="text-emerald-400 font-bold" x-text="order.phone"></a>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="text-xs text-gray-500 space-y-0.5">
+                  <template x-for="item in order.items">
+                    <div x-text="'• ' + item.name + ' ×' + item.qty"></div>
+                  </template>
+                </div>
+
+                <button @click="openSettlement(order)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-3 rounded-xl transition-all">
+                  ✓ Mark as Delivered
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <template x-if="counts().delivery === 0">
+            <div class="text-center py-20 bg-white rounded-2xl border border-gray-100">
+              <div class="text-4xl">🛵</div>
+              <div class="text-sm text-gray-400 font-medium mt-2">No orders out for delivery yet</div>
+            </div>
+          </template>
+
+        </div>
+      </template>
+
+      <template x-if="currentView === 'completed'">
+        <div class="space-y-5 max-w-4xl">
+
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-emerald-950 text-white rounded-2xl p-4">
+              <div class="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Total Collected</div>
+              <div class="text-2xl font-black mt-1" x-text="'₹' + metrics().revenue"></div>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-2xl p-4">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Delivery Cost</div>
+              <div class="text-2xl font-black text-red-500 mt-1" x-text="'₹' + metrics().deliveryCost"></div>
+            </div>
+            <div class="bg-white border border-gray-100 rounded-2xl p-4">
+              <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Net Profit</div>
+              <div class="text-2xl font-black mt-1" :class="metrics().net >= 0 ? 'text-emerald-600' : 'text-red-500'" x-text="'₹' + metrics().net"></div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-gray-100 rounded-2xl p-5 overflow-x-auto">
+            <div class="text-xs font-bold text-gray-900 mb-4" x-text="counts().completed + ' delivered orders'"></div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <th class="pb-3 pr-4">Order</th>
+                  <th class="pb-3 pr-4">Customer</th>
+                  <th class="pb-3 pr-4">Address</th>
+                  <th class="pb-3 pr-4 text-center">Payment</th>
+                  <th class="pb-3 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50 text-xs text-gray-700">
+                <template x-for="order in orders.filter(o=>o.status==='Delivered')" :key="order.id">
+                  <tr class="hover:bg-gray-50/50 transition-all">
+                    <td class="py-3 pr-4 mono font-bold text-[10px] text-gray-400" x-text="order.id"></td>
+                    <td class="py-3 pr-4">
+                      <div class="font-bold text-gray-900" x-text="order.parentName"></div>
+                      <div class="text-[10px] text-gray-400" x-text="'🐾 ' + order.petName"></div>
+                    </td>
+                    <td class="py-3 pr-4 max-w-[180px] truncate text-gray-500" x-text="order.address"></td>
+                    <td class="py-3 pr-4 text-center">
+                      <span class="text-[10px] font-black px-2 py-0.5 rounded-full"
+                        :class="{'bg-emerald-100 text-emerald-700': order.paymentMode==='UPI', 'bg-amber-100 text-amber-700': order.paymentMode==='Cash', 'bg-red-100 text-red-600': order.paymentMode==='Pending'}"
+                        x-text="order.paymentMode"></span>
+                    </td>
+                    <td class="py-3 text-right font-black text-gray-900" x-text="'₹' + order.total"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <template x-if="counts().completed === 0">
+              <div class="text-center py-12 text-xs text-gray-300">No deliveries completed yet today</div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="currentView === 'customers'">
+        <div class="space-y-4 max-w-3xl">
+          <div class="bg-white border border-gray-100 rounded-2xl p-5 overflow-x-auto">
+            <div class="text-sm font-bold text-gray-900 mb-4">Customer Profiles</div>
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <th class="pb-3 pr-4">Parent</th>
+                  <th class="pb-3 pr-4">Pet</th>
+                  <th class="pb-3 pr-4 text-center">Orders</th>
+                  <th class="pb-3 text-right">Lifetime Value</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-50 text-xs text-gray-700">
+                <template x-for="c in customers" :key="c.parentName">
+                  <tr class="hover:bg-gray-50/50 transition-all">
+                    <td class="py-3 pr-4 font-bold text-gray-900" x-text="c.parentName"></td>
+                    <td class="py-3 pr-4 text-gray-500" x-text="'🐾 ' + c.petName"></td>
+                    <td class="py-3 pr-4 text-center font-semibold" x-text="c.ordersCount"></td>
+                    <td class="py-3 text-right font-black text-emerald-600" x-text="'₹' + c.totalSpend"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <template x-if="customers.length === 0">
+              <div class="text-center py-12 text-xs text-gray-300">No customer data yet</div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+    </main>
+  </div>
+</div>
+
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-20 flex items-center justify-around px-1 py-2 safe-area-bottom">
+  <button @click="currentView='dashboard'" class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all" :class="currentView==='dashboard' ? 'text-gray-900' : 'text-gray-400'">
+    <span class="text-lg">🏠</span>
+    <span class="text-[9px] font-bold">Home</span>
+  </button>
+  <button @click="currentView='unconfirmed'" class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all relative" :class="currentView==='unconfirmed' ? 'text-amber-600' : 'text-gray-400'">
+    <span class="text-lg">⏳</span>
+    <span class="text-[9px] font-bold">Confirm</span>
+    <span x-show="counts().unconfirmed > 0" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-amber-500 text-white text-[8px] font-black rounded-full flex items-center justify-center" x-text="counts().unconfirmed"></span>
+  </button>
+  <button @click="currentView='packing'" class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all relative" :class="currentView==='packing' ? 'text-blue-600' : 'text-gray-400'">
+    <span class="text-lg">📦</span>
+    <span class="text-[9px] font-bold">Packing</span>
+    <span x-show="counts().packing > 0" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-blue-500 text-white text-[8px] font-black rounded-full flex items-center justify-center" x-text="counts().packing"></span>
+  </button>
+  <button @click="currentView='delivery'" class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all relative" :class="currentView==='delivery' ? 'text-indigo-600' : 'text-gray-400'">
+    <span class="text-lg">🚚</span>
+    <span class="text-[9px] font-bold">Deliver</span>
+    <span x-show="counts().delivery > 0" class="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-500 text-white text-[8px] font-black rounded-full flex items-center justify-center" x-text="counts().delivery"></span>
+  </button>
+  <button @click="currentView='completed'" class="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all" :class="currentView==='completed' ? 'text-emerald-600' : 'text-gray-400'">
+    <span class="text-lg">✅</span>
+    <span class="text-[9px] font-bold">Done</span>
+  </button>
+</nav>
+
+<script>
+function oms() {
+  return {
+    currentView: 'dashboard',
+    rawText: '',
+    toasts: [],
+    msgModal: { open: false, title: '', text: '', onCopy: null, onSkip: null },
+    settlementModal: { open: false, order: null, paymentMode: 'UPI' },
+    trips: [],
+    
+    // Clean state with sample data removed
+    orders: [],
+    customers: [],
+
+    // Report date range data binding
+    reportRange: {
+      from: new Date().toISOString().split('T')[0],
+      to: new Date().toISOString().split('T')[0]
+    },
+
+    init() {
+      console.log('PetHub OMS operational engine initialized.');
+    },
+
+    // ── Helpers ──────────────────────────────────────────────
+    todayStr() {
+      return new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    },
+
+    viewLabel() {
+      const labels = {
+        dashboard: '🏠 Dashboard',
+        unconfirmed: '⏳ Unconfirmed Orders',
+        packing: '📦 Packing Room',
+        delivery: '🚚 Delivery',
+        completed: '✅ Completed',
+        customers: '👥 Customers'
+      };
+      return labels[this.currentView] || 'PetHub';
+    },
+
+    counts() {
+      return {
+        unconfirmed: this.orders.filter(o => o.status === 'Not Confirmed').length,
+        packing:     this.orders.filter(o => o.status === 'Pending Packing').length,
+        delivery:    this.orders.filter(o => o.status === 'Out for Delivery').length,
+        completed:   this.orders.filter(o => o.status === 'Delivered').length,
+      };
+    },
+
+    metrics() {
+      const revenue = this.orders
+        .filter(o => o.status === 'Delivered')
+        .reduce((s, o) => s + o.total, 0);
+
+      const deliveryCost = this.trips.reduce((sum, t) => {
+        const start = parseFloat(t.startKm) || 0;
+        const end   = parseFloat(t.endKm)   || 0;
+        const km    = end > start ? end - start : 0;
+        return sum + km * 5;
+      }, 0);
+
+      return { revenue, deliveryCost, net: revenue - deliveryCost };
+    },
+
+    shoppingList() {
+      const map = {};
+      this.orders
+        .filter(o => o.status === 'Pending Packing')
+        .forEach(order => {
+          order.items.forEach(item => {
+            map[item.name] = (map[item.name] || 0) + item.qty;
+          });
+        });
+      return Object.entries(map).map(([name, qty]) => ({ name, qty }));
+    },
+
+    // ── Toast ─────────────────────────────────────────────────
+    toast(msg, icon = '✓') {
+      const id = Date.now();
+      this.toasts.push({ id, msg, icon });
+      setTimeout(() => {
+        this.toasts = this.toasts.filter(t => t.id !== id);
+      }, 3000);
+    },
+
+    // ── WhatsApp Message Modal ────────────────────────────────
+    showMsg(title, text, onCopy, onSkip) {
+      this.msgModal = { open: true, title, text, onCopy, onSkip };
+    },
+
+    copyMsgAndProceed() {
+      navigator.clipboard.writeText(this.msgModal.text).catch(() => {});
+      this.toast('Message copied to clipboard!', '📋');
+      this.msgModal.open = false;
+      if (this.msgModal.onCopy) this.msgModal.onCopy();
+    },
+
+    // ── Order Parsing ─────────────────────────────────────────
+    parseOrder() {
+      const text = this.rawText.trim();
+      if (!text) { this.toast('Paste an order message first', '⚠️'); return; }
+
+      const get = (regex) => { const m = text.match(regex); return m ? m[1].trim() : null; };
+
+      const parentName = get(/\*?Parent:\*?\s*([^\n\r]+)/i)   || 'Unknown Parent';
+      const petName    = get(/\*?Pet Name:\*?\s*([^\n\r]+)/i) || 'Unknown Pet';
+      const phone      = get(/\*?Phone:\*?\s*([^\n\r]+)/i)    || 'N/A';
+      const address    = get(/\*?Address:\*?\s*([^\n\r]+)/i)  || 'No Address';
+      const pincode    = get(/\*?Pincode:\*?\s*([^\n\r]+)/i)  || 'N/A';
+
+      const totalMatch = text.match(/TOTAL[:\s*]*[₹\s]*(\d+)/i);
+      const total = totalMatch ? parseInt(totalMatch[1], 10) : 0;
+
+      const items = [];
+      text.split('\n').forEach(line => {
+        const clean = line.replace(/^[•\-\*]\s*/, '').trim();
+        if (!clean || clean.length < 3) return;
+        if (!/x\s*\d+/i.test(clean) && !/=\s*₹/.test(clean)) return;
+        const qtyM = clean.match(/x\s*(\d+)/i);
+        const qty  = qtyM ? parseInt(qtyM[1]) : 1;
+        const name = clean.split(/x\s*\d+/i)[0].trim().replace(/\s*=.*/, '').trim()
+                       || 'Pet Product';
+        if (name) items.push({ name, qty, checked: false });
+      });
+
+      if (items.length === 0) {
+        items.push({ name: 'General Pet Product', qty: 1, checked: false });
+      }
+
+      const id = `PH-${1000 + this.orders.length + 1}`;
+      const order = {
+        id, parentName, petName, phone, address, pincode, items, total,
+        status: 'Not Confirmed',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        dateRaw: new Date().toISOString().split('T')[0], // Track ISO Date format for dynamic filtering
+        paymentMode: null
+      };
+
+      this.orders.unshift(order);
+      this.rawText = '';
+      this.updateCustomer(parentName, petName, total);
+      this.toast(`Order ${id} added`, '🐾');
+      this.currentView = 'unconfirmed';
+    },
+
+    loadSample() {
+      this.rawText = `*NEW ORDER: PETHUB* 🐾\n---\n🧑 *Parent:* Anjali Nair\n🐾 *Pet Name:* Kiki\n📍 *Address:* Olive Heights, Block C-3, Edapally, Kochi\n📮 *Pincode:* 682024\n\n*Items Ordered:*\n• Royal Canin Starter Maxi (4kg) x2 = ₹2900\n• Drools Puppy Chicken (3kg) x1 = ₹750\n\n*Subtotal:* ₹3650\n*Delivery:* FREE\n*TOTAL: ₹3650*`;
+    },
+
+    updateCustomer(parentName, petName, total) {
+      const existing = this.customers.find(
+        c => c.parentName.toLowerCase() === parentName.toLowerCase()
+      );
+      if (existing) {
+        existing.ordersCount += 1;
+        existing.totalSpend  += total;
+      } else {
+        this.customers.push({ parentName, petName, ordersCount: 1, totalSpend: total });
+      }
+    },
+
+    // ── Stage Actions ─────────────────────────────────────────
+    acceptOrder(order) {
+      order.status = 'Pending Packing';
+      const msg = this.buildConfirmMsg(order);
+      this.showMsg(
+        'Order Confirmed ✓',
+        msg,
+        () => { this.toast(`${order.id} moved to Packing`, '📦'); },
+        () => { this.toast(`${order.id} moved to Packing`, '📦'); }
+      );
+    },
+
+    rejectOrder(order) {
+      order.status = 'Cancelled';
+      this.toast(`${order.id} rejected`, '✕');
+    },
+
+    confirmAll() {
+      const pending = this.orders.filter(o => o.status === 'Not Confirmed');
+      pending.forEach(o => { o.status = 'Pending Packing'; });
+      this.toast(`${pending.length} orders accepted`, '✓');
+      this.currentView = 'packing';
+    },
+
+    shipOrder(order) {
+      order.status = 'Out for Delivery';
+      const msg = this.buildDeliveryMsg(order);
+      this.showMsg(
+        'Out for Delivery 🚚',
+        msg,
+        () => { this.toast(`${order.id} is out for delivery`, '🚚'); },
+        () => { this.toast(`${order.id} is out for delivery`, '🚚'); }
+      );
+    },
+
+    openSettlement(order) {
+      this.settlementModal = { open: true, order, paymentMode: 'UPI' };
+    },
+
+    confirmDelivered() {
+      const order = this.settlementModal.order;
+      if (!order) return;
+      order.status = 'Delivered';
+      order.paymentMode = this.settlementModal.paymentMode;
+      this.settlementModal.open = false;
+      this.toast(`${order.id} delivered · ${order.paymentMode}`, '✅');
+    },
+
+    // ── Trip Management ───────────────────────────────────────
+    addTrip() {
+      this.trips.push({ id: Date.now(), startKm: '', endKm: '' });
+    },
+
+    // ── Item-Wise Excel Download Engineering ─────────────────
+    exportItemWiseExcel() {
+      // Filter orders landing securely within designated range metrics
+      const targetOrders = this.orders.filter(o => {
+        if (!o.dateRaw) return true; // match fallback standard entries
+        return o.dateRaw >= this.reportRange.from && o.dateRaw <= this.reportRange.to;
+      });
+
+      if (targetOrders.length === 0) {
+        this.toast('No item logs found inside this range window', '⚠️');
+        return;
+      }
+
+      const rows = [];
+      targetOrders.forEach(order => {
+        order.items.forEach(item => {
+          // Dynamic pricing estimation fallback logic
+          const calculatedRate = order.total > 0 ? Math.round(order.total / order.items.reduce((acc, i) => acc + i.qty, 0)) : 0;
+          
+          rows.push({
+            "Order ID": order.id,
+            "Timestamp": order.timestamp,
+            "Date Code": order.dateRaw || 'Today',
+            "Parent Name": order.parentName,
+            "Pet Name": order.petName,
+            "Item Name": item.name,
+            "Quantity": item.qty,
+            "Estimated Item Rate (₹)": calculatedRate,
+            "Line Value Cost (₹)": calculatedRate * item.qty,
+            "Pincode Target": order.pincode,
+            "Pipeline Status": order.status,
+            "Payment Settlement Mode": order.paymentMode || 'Unsettled / COD'
+          });
+        });
+      });
+
+      // Build SheetJS Workbook
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Item-Wise Report");
+
+      // Auto-compute uniform column sizing layouts for aesthetics
+      const maxProps = [{wch:12},{wch:15},{wch:12},{wch:18},{wch:12},{wch:32},{wch:10},{wch:22},{wch:18},{wch:15},{wch:16},{wch:22}];
+      worksheet['!cols'] = maxProps;
+
+      // Force instant down-stream parsing pipeline
+      const fileNameStr = `PetHub_ItemWiseReport_${this.reportRange.from}_to_${this.reportRange.to}.xlsx`;
+      XLSX.writeFile(workbook, fileNameStr);
+      this.toast('Excel report ready & saved!', '📊');
+    },
+
+    // ── Message Builders ──────────────────────────────────────
+    buildConfirmMsg(order) {
+      const itemLines = order.items.map(i => `  • ${i.name} ×${i.qty}`).join('\n');
+      return `Hi ${order.parentName}! 👋\n\nYour PetHub order has been confirmed ✅\n\n🆔 Order ID: ${order.id}\n🐾 For: ${order.petName}\n\n📦 Items:\n${itemLines}\n\n💰 Total: ₹${order.total}\n🚚 Delivery: FREE\n\nWe're packing your order now and will send another update once it's on the way! 🐾\n\n— PetHub 🛒`;
+    },
+
+    buildDeliveryMsg(order) {
+      const itemLines = order.items.map(i => `  • ${i.name} ×${i.qty}`).join('\n');
+      return `Hi ${order.parentName}! 🛵\n\nYour PetHub order is now OUT FOR DELIVERY! 🚀\n\n🆔 Order ID: ${order.id}\n🐾 For: ${order.petName}\n\n📦 Items:\n${itemLines}\n\n📍 Delivering to: ${order.address}\n📮 Pincode: ${order.pincode}\n💰 Amount to pay: ₹${order.total}\n\nOur rider is on the way — please keep your phone handy! 🐾\n\n— PetHub 🛒`;
+    },
+
+    copyShoppingList() {
+      const list = this.shoppingList();
+      if (list.length === 0) { this.toast('Nothing to copy yet', '⚠️'); return; }
+      const text = '🛒 PetHub Shopping List\n\n' +
+        list.map(i => `• ${i.name}  ×${i.qty}`).join('\n');
+      navigator.clipboard.writeText(text).catch(() => {});
+      this.toast('Shopping list copied!', '📋');
+    }
+  };
+}
+</script>
+</body>
+</html>
